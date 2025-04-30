@@ -54,14 +54,64 @@ const data = [
   },
 ];
 
+const getScore = (data: number[]) => {
+  const value = data.reduce((a, b) => a + b, 0) / data.length;
+  const num = Math.sqrt(
+    data.reduce((sum, val) => sum + (val - value) ** 2, 0) / data.length
+  );
+  return data.map((v) => (v - value) / num);
+};
+
+const Dot = ({ cx, cy, payload }: any) => {
+  const pvZ = payload.pvZScore;
+  const color = Math.abs(pvZ) > 1 ? "red" : "blue";
+  return (
+    <circle cx={cx} cy={cy} r={4} stroke="white" strokeWidth={1} fill={color} />
+  );
+};
+
+const calculateZScoreStops = (values: number[]) => {
+  const zScores = getScore(values);
+
+  const points = zScores.map((z, i) => ({
+    offset: ((i / (zScores.length - 1)) * 100).toFixed(1) + "%",
+    stopColor: Math.abs(z) > 1 ? "red" : "blue",
+  }));
+
+  const stops = [];
+  for (let i = 0; i < points.length; i++) {
+    const curr = points[i];
+    const prev = points[i - 1];
+    if (i === 0) {
+      stops.push(curr);
+    } else if (curr.stopColor !== prev.stopColor) {
+      stops.push({ offset: curr.offset, stopColor: prev.stopColor });
+      stops.push(curr);
+    }
+  }
+
+  return stops;
+};
+
 export default function Example() {
+  const pvZScores = getScore(data.map((d) => d.pv));
+  const uvZScores = getScore(data.map((d) => d.uv));
+  const newData = data.map((d, i) => ({
+    ...d,
+    pvZScore: pvZScores[i],
+    uvZScore: uvZScores[i],
+  }));
+
+  const pvStops = calculateZScoreStops(newData.map((d) => d.pv));
+  const uvStops = calculateZScoreStops(newData.map((d) => d.uv));
+
   return (
     <div style={{ width: 800, height: 800 }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart
           width={500}
           height={300}
-          data={data}
+          data={newData}
           margin={{
             top: 5,
             right: 30,
@@ -69,18 +119,40 @@ export default function Example() {
             bottom: 5,
           }}
         >
+          <defs>
+            <linearGradient id="strokePv" x1="0" y1="0" x2="1" y2="0">
+              {pvStops.map((stop, i) => (
+                <stop key={i} offset={stop.offset} stopColor={stop.stopColor} />
+              ))}
+            </linearGradient>
+            <linearGradient id="strokeUv" x1="0" y1="0" x2="1" y2="0">
+              {uvStops.map((stop, i) => (
+                <stop key={i} offset={stop.offset} stopColor={stop.stopColor} />
+              ))}
+            </linearGradient>
+          </defs>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" />
           <YAxis />
           <Tooltip />
           <Legend />
+
           <Line
             type="monotone"
             dataKey="pv"
-            stroke="#8884d8"
+            stroke="url(#strokePv)"
+            strokeWidth={4}
+            dot={<Dot />}
             activeDot={{ r: 8 }}
           />
-          <Line type="monotone" dataKey="uv" stroke="#82ca9d" />
+          <Line
+            type="monotone"
+            dataKey="uv"
+            stroke="url(#strokeUv)"
+            dot={<Dot />}
+            strokeWidth={4}
+            activeDot={{ r: 8 }}
+          />
         </LineChart>
       </ResponsiveContainer>
     </div>
